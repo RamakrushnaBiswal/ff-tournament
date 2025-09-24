@@ -44,7 +44,7 @@ router.post(
     // Validate fields
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log("Validation errors:", errors.array());
+      // console.log("Validation errors:", errors.array());
       return res.status(400).json({ success: false, errors: errors.array() });
     }
 
@@ -58,9 +58,9 @@ router.post(
             folder: "tournament_uploads",
           });
           screenshotUrl = result.secure_url;
-          console.log("Screenshot uploaded to Cloudinary:", screenshotUrl);
+          // console.log("Screenshot uploaded to Cloudinary:", screenshotUrl);
         } catch (err) {
-          console.error("Cloudinary upload failed:", err);
+          // console.error("Cloudinary upload failed:", err);
           return res
             .status(500)
             .json({ success: false, message: "Screenshot upload failed" });
