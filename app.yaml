@@ -1,6 +1,9 @@
 runtime: nodejs20
-env: standard
 instance_class: F1
+env: flex
 handlers:
   - url: /.*
     script: auto
+automatic_scaling:
+  min_num_instances: 1
+  max_num_instances: 2
