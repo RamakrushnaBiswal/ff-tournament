@@ -3,11 +3,11 @@ const { body, validationResult } = require("express-validator");
 const multer = require("multer");
 const fs = require("fs");
 const Team = require("../models/Team");
-const cloudinary = require("../utils/cloudinary"); // new cloudinary util
+const cloudinary = require("../utils/cloudinary");
 
 const router = express.Router();
 
-// Multer config - store temporarily in /temp
+// Multer config
 const upload = multer({ dest: "temp/" });
 
 // Require login for registration
@@ -15,6 +15,8 @@ const ensureAuth = (req, res, next) => {
   if ((req.isAuthenticated && req.isAuthenticated()) || req.user) return next();
   return res.status(401).json({ success: false, message: "Login required" });
 };
+
+
 
 router.post(
   "/register",
@@ -24,6 +26,7 @@ router.post(
     body("teamName").notEmpty().withMessage("Team name is required"),
     body("email").optional().isEmail().withMessage("Valid email required"),
     body("leader").notEmpty().withMessage("Leader name required"),
+    body("phone").notEmpty().withMessage("Leader phone number required"),
     body("p1").notEmpty().withMessage("Player 1 required"),
     body("p2").notEmpty().withMessage("Player 2 required"),
     body("p3").notEmpty().withMessage("Player 3 required"),
@@ -31,38 +34,62 @@ router.post(
     body("transactionId").notEmpty().withMessage("Transaction ID required"),
   ],
   async (req, res) => {
-    const errors = validationResult(req);
-    if (!errors.isEmpty())
-      return res.status(400).json({ success: false, errors: errors.array() });
+    // console.log("---- Form Submission ----");
+    // console.log("req.body:", req.body);
+    // console.log("req.file:", req.file);
+    // console.log("req.user:", req.user);
 
-    // console.log("Incoming body:", req.body);
-    // console.log("Incoming file:", req.file);
+    // Example
+
+    // Validate fields
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      console.log("Validation errors:", errors.array());
+      return res.status(400).json({ success: false, errors: errors.array() });
+    }
 
     try {
       let screenshotUrl = null;
 
-      // Upload screenshot to Cloudinary if present
+      // Upload screenshot if present
       if (req.file) {
-        const result = await cloudinary.uploader.upload(req.file.path, {
-          folder: "tournament_uploads",
-        });
-        screenshotUrl = result.secure_url;
-
-        // remove temp file after upload
         try {
-          fs.unlinkSync(req.file.path);
+          const result = await cloudinary.uploader.upload(req.file.path, {
+            folder: "tournament_uploads",
+          });
+          screenshotUrl = result.secure_url;
+          console.log("Screenshot uploaded to Cloudinary:", screenshotUrl);
         } catch (err) {
-          console.error("Failed to delete temp file:", err);
+          console.error("Cloudinary upload failed:", err);
+          return res
+            .status(500)
+            .json({ success: false, message: "Screenshot upload failed" });
+        } finally {
+          // Remove temp file
+          fs.unlink(req.file.path, (err) => {
+            if (err) console.error("Temp file deletion failed:", err);
+          });
         }
       }
 
-      // Use server-side authenticated email
+      // Determine email
       const authedEmail =
-        req.user?.email || req.user?.emails?.[0]?.value || req.body.email || "";
+        req.user?.email ||
+        req.user?.emails?.[0]?.value ||
+        req.body.email ||
+        null;
 
+      if (!authedEmail) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Email is required" });
+      }
+
+      // Create team
       const team = new Team({
         teamName: req.body.teamName,
         email: authedEmail,
+        phone: req.body.phone,
         leader: req.body.leader,
         players: {
           p1: req.body.p1,
@@ -75,12 +102,20 @@ router.post(
       });
 
       await team.save();
-      res.status(201).json({
-        success: true,
-        message: "Team registered successfully!",
+      // console.log("Team registered successfully:", team);
+      res.render("success", {
+        title: "Registration Successful",
+        message: `🎉 Congratulations ${team.leader}! Your team "${team.teamName}" has been registered successfully!`,
       });
     } catch (err) {
       console.error("Server error:", err);
+      if (err.name === "ValidationError") {
+        // Mongoose validation error
+        const messages = Object.values(err.errors).map((e) => e.message);
+        return res
+          .status(400)
+          .json({ success: false, message: messages.join(", ") });
+      }
       res.status(500).json({ success: false, message: "Server error" });
     }
   }

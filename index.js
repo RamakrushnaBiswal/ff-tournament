@@ -10,6 +10,7 @@ const app = express();
 // Load environment variables from .env (if present)
 require('dotenv').config();
 const teamRoutes = require("./routes/teamRoutes");
+const Team = require('./models/Team');
 const cors = require("cors");
 app.use(cors());
 
@@ -121,7 +122,6 @@ app.use((req, res, next) => {
 
 // Auth routes
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-app.use("/api/team", teamRoutes);
 
 app.get('/auth/google/callback', (req, res, next) => {
     passport.authenticate('google', (err, user, info) => {
@@ -154,14 +154,33 @@ app.get('/logout', (req, res) => {
 });
 
 // Home route
-app.get('/', (req, res) => {
+// Home route
+app.get('/', async (req, res) => {
+  let alreadyRegistered = false;
+
+  // Check if the user is logged in
+  if (req.user) {
+    try {
+      // Check if this user/email already has a registered team
+      const team = await Team.findOne({ email: req.user.email });
+      if (team) alreadyRegistered = true;
+    } catch (err) {
+      console.error('Error checking existing team:', err);
+    }
+  }
+
   res.render('index', {
     title: 'Freefire Tournament',
     message: 'Welcome to the tournament!',
-    announcementText: 'Register now for the ultimate Free Fire Battle Royale Tournament! Exciting prizes await!',
-    // Do not pass `user` here so we don't override res.locals.user with undefined
+    user: req.user,
+    userEmail: req.user?.email || '',
+    isAuthenticated: !!req.user,
+    alreadyRegistered // pass to template
   });
 });
+
+
+app.use("/api/team", teamRoutes);
 
 // 404 handler (catch-all)
 app.use((req, res) => {
